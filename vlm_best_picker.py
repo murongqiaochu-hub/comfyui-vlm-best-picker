@@ -10,6 +10,7 @@ is expected to respond with a JSON object containing at least a `score`
 tie-breaking when multiple candidates share the top score.
 """
 import base64
+import fnmatch
 import json
 import os
 import re
@@ -135,8 +136,9 @@ class VLMBestImagePicker:
                         "multiline": True,
                         "default": "",
                         "tooltip": (
-                            "Filenames to skip (one per line, or comma-separated). "
-                            "Match is case-insensitive against the basename only. "
+                            "Filenames or glob patterns to skip (one per line, or comma-separated). "
+                            "Supports wildcards: '0*' matches anything starting with 0, '*.png' matches all PNGs, "
+                            "'IMG_47??.JPG' matches single chars. Case-insensitive, basename-only match. "
                             "Skipped files do not call the model and do not appear in rankings."
                         ),
                     },
@@ -154,18 +156,23 @@ class VLMBestImagePicker:
         if not files:
             raise RuntimeError(f"No images found in: {image_dir}")
 
-        ignore_set = {
-            name.strip().lower()
-            for name in re.split(r"[,\n]+", ignore_files or "")
-            if name.strip()
-        }
-        if ignore_set:
-            kept = [p for p in files if os.path.basename(p).lower() not in ignore_set]
-            skipped = [os.path.basename(p) for p in files if os.path.basename(p).lower() in ignore_set]
-            print(f"[VLMBestImagePicker] ignoring {len(skipped)}: {skipped}")
+        patterns = [
+            p.strip().lower()
+            for p in re.split(r"[,\n]+", ignore_files or "")
+            if p.strip()
+        ]
+
+        def _is_ignored(path):
+            base = os.path.basename(path).lower()
+            return any(fnmatch.fnmatch(base, pat) for pat in patterns)
+
+        if patterns:
+            kept = [p for p in files if not _is_ignored(p)]
+            skipped = [os.path.basename(p) for p in files if _is_ignored(p)]
+            print(f"[VLMBestImagePicker] patterns={patterns} → skipped {len(skipped)}: {skipped}")
             files = kept
             if not files:
-                raise RuntimeError(f"All images filtered out by ignore_files. Original: {len(skipped)} files.")
+                raise RuntimeError(f"All images filtered out by ignore_files patterns: {patterns}")
 
         # Warmup: pre-load the model into VRAM with keep_alive. The first
         # request after a cold start can return 502 if the HTTP layer becomes

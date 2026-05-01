@@ -44,6 +44,7 @@ No extra Python dependencies — the node uses stdlib `urllib` plus `numpy/torch
 | `model` | STRING | `qwen2.5vl:7b` | Any Ollama vision model tag. |
 | `timeout_per_image` | INT | 60 | Seconds. Crank up for very large images / slow GPUs. |
 | `tie_break` | enum | `frontal_fullbody` | `first` / `frontal_fullbody` / `shortest_reason`. |
+| `ignore_files` | STRING (multiline) | `""` | Filenames to skip, one per line or comma-separated. Case-insensitive. Skipped files do not call the model and do not appear in rankings. |
 
 ## Prompt contract
 

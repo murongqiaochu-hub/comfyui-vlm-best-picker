@@ -127,19 +127,42 @@ class VLMBestImagePicker:
         client = ollama.Client(host=url, timeout=timeout_per_image)
         results = []
 
+        # Warmup: cold-load the model into VRAM. Ollama returns HTTP 502 on
+        # the first request while the model is loading, which the python
+        # client surfaces as ResponseError(''). A short retry+warmup avoids
+        # the first real image hitting that race.
+        for attempt in range(3):
+            try:
+                client.generate(model=model, prompt="", keep_alive="30m", options={"num_predict": 1})
+                break
+            except Exception as e:
+                print(f"[VLMBestImagePicker] warmup attempt {attempt + 1} failed: {e!r}")
+                time.sleep(5 + attempt * 5)
+
+        def _call_with_retry(img_b64, retries=2):
+            last_err = None
+            for k in range(retries + 1):
+                try:
+                    resp = client.generate(
+                        model=model,
+                        prompt=prompt,
+                        images=[img_b64],
+                        stream=False,
+                        options={"temperature": 0.1, "num_predict": 200},
+                    )
+                    return resp.get("response", "") if isinstance(resp, dict) else getattr(resp, "response", "")
+                except Exception as e:
+                    last_err = e
+                    if k < retries:
+                        time.sleep(2 + k * 3)
+            raise last_err
+
         for idx, path in enumerate(files):
             t0 = time.time()
             with open(path, "rb") as f:
                 img_b64 = base64.b64encode(f.read()).decode()
             try:
-                resp = client.generate(
-                    model=model,
-                    prompt=prompt,
-                    images=[img_b64],
-                    stream=False,
-                    options={"temperature": 0.1, "num_predict": 200},
-                )
-                raw = resp.get("response", "") if isinstance(resp, dict) else getattr(resp, "response", "")
+                raw = _call_with_retry(img_b64)
             except Exception as e:
                 raw = f'{{"score": -1, "reason": "ERR: {e!r}"}}'
 

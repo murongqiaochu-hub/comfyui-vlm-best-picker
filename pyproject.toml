@@ -1,0 +1,14 @@
+[project]
+name = "comfyui-vlm-best-picker"
+description = "ComfyUI custom node that picks the best image from a directory by scoring each one with a vision-language model via Ollama."
+version = "0.1.0"
+license = { text = "MIT" }
+dependencies = ["ollama>=0.4.0"]
+
+[project.urls]
+Repository = "https://github.com/murongqiaochu-hub/comfyui-vlm-best-picker"
+
+[tool.comfy]
+PublisherId = "murongqiaochu-hub"
+DisplayName = "VLM Best Image Picker"
+Icon = ""

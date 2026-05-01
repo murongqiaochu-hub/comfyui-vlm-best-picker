@@ -19,16 +19,10 @@ You have a folder of N candidate images (product photos, screenshots, frames, et
 ```bash
 cd ComfyUI/custom_nodes
 git clone https://github.com/murongqiaochu-hub/comfyui-vlm-best-picker.git
-cd comfyui-vlm-best-picker
-pip install -r requirements.txt   # ollama
 # restart ComfyUI
 ```
 
-If your ComfyUI uses an embedded Python (e.g. the 秋叶 standalone build), point pip at it:
-
-```bash
-"C:\path\to\ComfyUI\python\python.exe" -m pip install -r requirements.txt
-```
+No extra Python dependencies — the node uses stdlib `urllib` plus `numpy/torch/Pillow` already shipped with ComfyUI.
 
 ## Prereqs
 

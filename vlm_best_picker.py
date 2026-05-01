@@ -14,15 +14,38 @@ import json
 import os
 import re
 import time
+import urllib.error
+import urllib.request
 
 import numpy as np
 import torch
 from PIL import Image
 
-try:
-    import ollama
-except ImportError:
-    ollama = None
+
+def _ollama_generate(url, model, prompt, images_b64, timeout, num_predict=200, keep_alive=None):
+    """Raw HTTP call to Ollama's /api/generate. Avoids the official python
+    SDK because some versions raise ResponseError('') on transient 502s
+    during model cold-load instead of returning a usable error."""
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": 0.1, "num_predict": num_predict},
+    }
+    if images_b64:
+        payload["images"] = images_b64
+    if keep_alive is not None:
+        payload["keep_alive"] = keep_alive
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url.rstrip("/") + "/api/generate",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = resp.read()
+    return json.loads(data).get("response", "")
 
 
 SUPPORTED_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
@@ -115,25 +138,16 @@ class VLMBestImagePicker:
     CATEGORY = "VLM"
 
     def pick_best(self, image_dir, prompt, url, model, timeout_per_image, tie_break):
-        if ollama is None:
-            raise RuntimeError(
-                "Python package 'ollama' not installed. Run: pip install ollama"
-            )
-
         files = _list_images(image_dir)
         if not files:
             raise RuntimeError(f"No images found in: {image_dir}")
 
-        client = ollama.Client(host=url, timeout=timeout_per_image)
-        results = []
-
-        # Warmup: cold-load the model into VRAM. Ollama returns HTTP 502 on
-        # the first request while the model is loading, which the python
-        # client surfaces as ResponseError(''). A short retry+warmup avoids
-        # the first real image hitting that race.
+        # Warmup: pre-load the model into VRAM with keep_alive. The first
+        # request after a cold start can return 502 if the HTTP layer becomes
+        # briefly unreachable while the GGUF is being mmapped.
         for attempt in range(3):
             try:
-                client.generate(model=model, prompt="", keep_alive="30m", options={"num_predict": 1})
+                _ollama_generate(url, model, "", [], timeout=120, num_predict=1, keep_alive="30m")
                 break
             except Exception as e:
                 print(f"[VLMBestImagePicker] warmup attempt {attempt + 1} failed: {e!r}")
@@ -143,20 +157,14 @@ class VLMBestImagePicker:
             last_err = None
             for k in range(retries + 1):
                 try:
-                    resp = client.generate(
-                        model=model,
-                        prompt=prompt,
-                        images=[img_b64],
-                        stream=False,
-                        options={"temperature": 0.1, "num_predict": 200},
-                    )
-                    return resp.get("response", "") if isinstance(resp, dict) else getattr(resp, "response", "")
+                    return _ollama_generate(url, model, prompt, [img_b64], timeout=timeout_per_image)
                 except Exception as e:
                     last_err = e
                     if k < retries:
                         time.sleep(2 + k * 3)
             raise last_err
 
+        results = []
         for idx, path in enumerate(files):
             t0 = time.time()
             with open(path, "rb") as f:

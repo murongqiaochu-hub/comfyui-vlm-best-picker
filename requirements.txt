@@ -1,1 +1,1 @@
-ollama>=0.4.0
+# No third-party deps. Uses stdlib urllib + numpy/torch/Pillow that ship with ComfyUI.

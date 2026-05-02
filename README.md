@@ -36,15 +36,33 @@ No extra Python dependencies — the node uses stdlib `urllib` plus `numpy/torch
 
 ## Node inputs
 
+The node accepts candidates from **either** a directory on disk **or** an in-graph IMAGE batch — connect whichever fits your workflow. If both are given, the IMAGE batch wins.
+
+### Required
+
 | Input | Type | Default | Notes |
 |---|---|---|---|
-| `image_dir` | STRING | `""` | Absolute directory path. Reads `.jpg/.jpeg/.png/.webp/.bmp`. |
 | `prompt` | STRING (multiline) | (Chinese e-commerce default) | Must instruct the model to output JSON with at least `score`. |
 | `url` | STRING | `http://127.0.0.1:11434` | Ollama HTTP endpoint. |
 | `model` | STRING | `qwen2.5vl:7b` | Any Ollama vision model tag. |
 | `timeout_per_image` | INT | 60 | Seconds. Crank up for very large images / slow GPUs. |
 | `tie_break` | enum | `frontal_fullbody` | `first` / `frontal_fullbody` / `shortest_reason`. |
-| `ignore_files` | STRING (multiline) | `""` | Filenames or glob patterns to skip, one per line or comma-separated. Supports wildcards (`0*`, `*.png`, `IMG_47??.JPG`). Case-insensitive, basename-only. Skipped files do not call the model and do not appear in rankings. |
+
+### Optional (input source)
+
+| Input | Type | Default | Notes |
+|---|---|---|---|
+| `image_dir` | STRING | `""` | Absolute directory path. Reads `.jpg/.jpeg/.png/.webp/.bmp`. Used when `images` is not connected. |
+| `images` | IMAGE | — | IMAGE batch input (e.g. crops produced upstream). Each batch item is one candidate. **If connected, `image_dir` is ignored.** |
+| `filenames` | STRING (multiline) | `""` | Optional display names for IMAGE batch (one per line or comma-separated). Missing names fall back to `image_0`, `image_1`, … |
+
+### Optional (slicing & filtering)
+
+| Input | Type | Default | Notes |
+|---|---|---|---|
+| `start_index` | INT | 0 | Skip the first N candidates (after `ignore_files` filter). |
+| `max_count` | INT | 0 | Score at most N candidates (0 = no limit). |
+| `ignore_files` | STRING (multiline) | `""` | Filenames or glob patterns to skip (**`image_dir` mode only**). One per line or comma-separated. Supports wildcards (`0*`, `*.png`, `IMG_47??.JPG`). Case-insensitive, basename-only. |
 
 ## Prompt contract
 

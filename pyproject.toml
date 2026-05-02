@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-vlm-best-picker"
 description = "ComfyUI custom node that picks the best image from a directory by scoring each one with a vision-language model via Ollama."
-version = "0.1.0"
+version = "0.2.0"
 license = { text = "MIT" }
 dependencies = []
 
